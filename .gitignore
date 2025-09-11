@@ -13,6 +13,9 @@ include/__pycache__/
 __pycache__/
 examples/out.txt
 .DS_Store
+build/
+examples/build/
+deps/
 
 
 

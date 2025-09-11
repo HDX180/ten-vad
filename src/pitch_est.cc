@@ -695,7 +695,7 @@ int AUP_PE_destroy(void** stPtr) {
 int AUP_PE_memAllocate(void* stPtr, const PE_StaticCfg* pCfg) {
   PE_St* stHdl = NULL;
   PE_StaticCfg localStCfg;
-  Biquad_StaticCfg biquadStCfg = {0, 0, 0, {0}, {0}, 0};
+  Biquad_StaticCfg biquadStCfg = {0, 0, {0}, {0}, 0};
   int idx;
   int totalMemSize = 0;
 

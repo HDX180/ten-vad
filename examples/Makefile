@@ -1,4 +1,3 @@
-
 #
 #  Copyright © 2025 Agora
 #  This file is part of TEN Framework, an open source project.
@@ -6,11 +5,22 @@
 #  Refer to the "LICENSE" file in the root directory for more information.
 #
 
-# 编译器设置
-CC = gcc
-CFLAGS = -Wall -O2 -fPIC -std=c99
+# 编译器设置 - 改为g++以支持C++库链接
+CC = g++
+CXX = g++
+CFLAGS = -Wall -O2 -fPIC -std=c++11
+CXXFLAGS = $(CFLAGS)
 LDFLAGS_SHARED = -shared
 LDFLAGS_STATIC = -r
+
+# C++库链接设置
+LIBS = -lm -lstdc++ -lpthread
+# 如果系统使用libc++，添加以下选项
+ifeq ($(shell ldd ../lib/Linux/x64/libten_vad.so 2>/dev/null | grep -c "libc++"), 1)
+    LIBS += -lc++ -lc++abi
+    CFLAGS += -stdlib=libc++
+    CXXFLAGS += -stdlib=libc++
+endif
 
 # 目录设置
 INCLUDE_DIR = ../include
@@ -39,36 +49,17 @@ ifeq ($(UNAME_S),Darwin)
     LDFLAGS_SHARED = -dynamiclib
     SHARED_LIB = $(BUILD_DIR)/libten_vad_state_machine.dylib
     CFLAGS += -fvisibility=hidden
+    CXXFLAGS += -fvisibility=hidden
 endif
 
-# 默认目标
-all: $(SHARED_LIB) $(STATIC_LIB) $(EXAMPLE_EXEC)
+# 默认目标 - 先检查依赖再构建
+all: check-deps $(SHARED_LIB) $(STATIC_LIB) $(EXAMPLE_EXEC)
 
 # 创建构建目录
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-# 编译状态机目标文件
-$(STATE_MACHINE_OBJ): $(STATE_MACHINE_SOURCE) | $(BUILD_DIR)
-	@echo "🔨 编译状态机目标文件..."
-	$(CC) $(CFLAGS) -DTENVAD_STATE_MACHINE_EXPORTS -I$(INCLUDE_DIR) -c $< -o $@
-
-# 构建动态库
-$(SHARED_LIB): $(STATE_MACHINE_OBJ)
-	@echo "📦 构建状态机动态库..."
-	$(CC) $(LDFLAGS_SHARED) -o $@ $^ -L$(LIB_DIR) -lten_vad
-
-# 构建静态库
-$(STATIC_LIB): $(STATE_MACHINE_OBJ)
-	@echo "📦 构建状态机静态库..."
-	ar rcs $@ $^
-
-# 构建示例程序
-$(EXAMPLE_EXEC): $(EXAMPLE_SOURCE) $(SHARED_LIB) | $(BUILD_DIR)
-	@echo "🔨 构建示例程序..."
-	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) -I$(EXAMPLES_DIR) -o $@ $< -L$(BUILD_DIR) -L$(LIB_DIR) -lten_vad_state_machine -lten_vad -lm
-
-# 检查依赖
+# 检查依赖 - 作为独立的目标，不是文件依赖
 check-deps:
 	@echo "🔍 检查依赖..."
 	@if [ ! -f "$(TEN_VAD_LIB)" ]; then \
@@ -80,7 +71,40 @@ check-deps:
 		echo "❌ 错误: 找不到 $(INCLUDE_DIR)/ten_vad.h"; \
 		exit 1; \
 	fi
+	@if [ ! -f "$(STATE_MACHINE_SOURCE)" ]; then \
+		echo "❌ 错误: 找不到 $(STATE_MACHINE_SOURCE)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(EXAMPLE_SOURCE)" ]; then \
+		echo "❌ 错误: 找不到 $(EXAMPLE_SOURCE)"; \
+		exit 1; \
+	fi
 	@echo "✅ 依赖检查通过"
+	@echo "🔍 检查libten_vad.so的依赖..."
+	@ldd $(TEN_VAD_LIB) || echo "⚠️  无法检查动态库依赖"
+
+# 编译状态机目标文件
+$(STATE_MACHINE_OBJ): $(STATE_MACHINE_SOURCE) | $(BUILD_DIR)
+	@echo "🔨 编译状态机目标文件..."
+	$(CC) $(CFLAGS) -DTENVAD_STATE_MACHINE_EXPORTS -I$(INCLUDE_DIR) -c $< -o $@
+
+# 构建动态库
+$(SHARED_LIB): $(STATE_MACHINE_OBJ)
+	@echo "📦 构建状态机动态库..."
+	$(CC) $(LDFLAGS_SHARED) -o $@ $^ -L$(LIB_DIR) -lten_vad $(LIBS)
+
+# 构建静态库
+$(STATIC_LIB): $(STATE_MACHINE_OBJ)
+	@echo "📦 构建状态机静态库..."
+	ar rcs $@ $^
+
+# 构建示例程序 - 添加rpath以便运行时找到库
+$(EXAMPLE_EXEC): $(EXAMPLE_SOURCE) $(SHARED_LIB) | $(BUILD_DIR)
+	@echo "🔨 构建示例程序..."
+	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) -I$(EXAMPLES_DIR) -o $@ $< \
+		-L$(BUILD_DIR) -L$(LIB_DIR) \
+		-Wl,-rpath,$(BUILD_DIR) -Wl,-rpath,$(LIB_DIR) \
+		-lten_vad_state_machine -lten_vad $(LIBS)
 
 # 测试
 test: $(EXAMPLE_EXEC)
@@ -107,6 +131,7 @@ info:
 	@echo "📋 构建信息:"
 	@echo "   编译器: $(CC)"
 	@echo "   编译选项: $(CFLAGS)"
+	@echo "   链接库: $(LIBS)"
 	@echo "   包含目录: $(INCLUDE_DIR)"
 	@echo "   库目录: $(LIB_DIR)"
 	@echo "   构建目录: $(BUILD_DIR)"
@@ -117,6 +142,21 @@ info:
 	@echo "   静态库: $(STATIC_LIB)"
 	@echo "   示例程序: $(EXAMPLE_EXEC)"
 
+# 调试信息 - 新增目标用于诊断问题
+debug-deps:
+	@echo "🔍 调试依赖信息:"
+	@echo "检查libten_vad.so的依赖:"
+	@ldd $(TEN_VAD_LIB) || echo "无法检查依赖"
+	@echo ""
+	@echo "检查系统C++库:"
+	@ldconfig -p | grep -E "(libc\+\+|libstdc\+\+)" || echo "未找到C++库"
+	@echo ""
+	@echo "检查编译器版本:"
+	@$(CC) --version
+	@echo ""
+	@echo "检查可用的C++库:"
+	@find /usr/lib* /lib* -name "libc++*" -o -name "libstdc++*" 2>/dev/null | head -10
+
 # 帮助
 help:
 	@echo "🔧 可用目标:"
@@ -125,18 +165,17 @@ help:
 	@echo "   static      - 仅构建静态库"
 	@echo "   example     - 仅构建示例程序"
 	@echo "   check-deps  - 检查依赖"
+	@echo "   debug-deps  - 调试依赖问题"
 	@echo "   test        - 运行测试"
 	@echo "   install     - 安装到系统目录"
 	@echo "   clean       - 清理构建文件"
 	@echo "   info        - 显示构建信息"
 	@echo "   help        - 显示此帮助"
 
-# 单独构建目标
-shared: $(SHARED_LIB)
-static: $(STATIC_LIB)
-example: $(EXAMPLE_EXEC)
+# 单独构建目标 - 这些也需要先检查依赖
+shared: check-deps $(SHARED_LIB)
+static: check-deps $(STATIC_LIB)
+example: check-deps $(EXAMPLE_EXEC)
 
-# 依赖关系
-$(SHARED_LIB) $(STATIC_LIB) $(EXAMPLE_EXEC): check-deps
-
-.PHONY: all clean install test help info check-deps shared static example
+# 声明伪目标
+.PHONY: all clean install test help info check-deps debug-deps shared static example

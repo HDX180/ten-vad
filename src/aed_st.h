@@ -50,14 +50,14 @@ class AUP_MODULE_AIVAD {
   int inited = 0;
   int clear_hidden = 0;
 
-  char input_names_buf[AUP_AED_MODEL_IO_NUM][AUP_AED_MODEL_NAME_LENGTH] = {0};
+  char input_names_buf[AUP_AED_MODEL_IO_NUM][AUP_AED_MODEL_NAME_LENGTH] = {{0}};
   const char* input_names[AUP_AED_MODEL_IO_NUM] = {NULL};
   float input_data_buf_0[AUP_AED_CONTEXT_WINDOW_LEN * AUP_AED_FEA_LEN] = {0};
   float input_data_buf_1234[AUP_AED_MODEL_IO_NUM - 1]
-                           [AUP_AED_MODEL_HIDDEN_DIM] = {0};
+                           [AUP_AED_MODEL_HIDDEN_DIM] = {{0}};
   OrtValue* ort_input_tensors[AUP_AED_MODEL_IO_NUM] = {NULL};
 
-  char output_names_buf[AUP_AED_MODEL_IO_NUM][AUP_AED_MODEL_NAME_LENGTH] = {0};
+  char output_names_buf[AUP_AED_MODEL_IO_NUM][AUP_AED_MODEL_NAME_LENGTH] = {{0}};
   const char* output_names[AUP_AED_MODEL_IO_NUM] = {NULL};
   OrtValue* ort_output_tensors[AUP_AED_MODEL_IO_NUM] = {NULL};
 };
